@@ -22,11 +22,19 @@ class DemoService:
         self.estados = {}
         self.bloqueo = asyncio.Lock()
 
+    # ---------------------------------------------
+    # CONSULTAR DEMOS
+    # ---------------------------------------------
+
     def obtener_demos(self, id_vehiculo):
         return self.repository.ejecutar(
             "sp_obtener_demos",
             (id_vehiculo,)
         )
+
+    # ---------------------------------------------
+    # CONSULTAR MOVIMIENTOS DE UN DEMO
+    # ---------------------------------------------
 
     def obtener_movimientos_demo(self, id_demo):
         return self.repository.ejecutar(
@@ -34,13 +42,65 @@ class DemoService:
             (id_demo,)
         )
 
+    # ---------------------------------------------
+    # CREAR DEMO
+    # ---------------------------------------------
+
+    def crear_demo(self, id_vehiculo, nombre, descripcion):
+        vehiculo = self.vehiculo_service.obtener_vehiculo(
+            id_vehiculo
+        )
+
+        if vehiculo is None:
+            raise ValueError("Vehículo no encontrado")
+
+        if not vehiculo["activo"]:
+            raise ValueError("El vehículo está inactivo")
+
+        return self.repository.ejecutar(
+            "sp_crear_demo",
+            (id_vehiculo, nombre, descripcion)
+        )
+
+    # ---------------------------------------------
+    # ACTUALIZAR DEMO
+    # ---------------------------------------------
+
+    def actualizar_demo(
+        self,
+        id_demo,
+        nombre,
+        descripcion,
+        activo
+    ):
+        return self.repository.ejecutar(
+            "sp_actualizar_demo",
+            (id_demo, nombre, descripcion, int(activo))
+        )
+
+    # ---------------------------------------------
+    # ELIMINAR DEMO
+    # ---------------------------------------------
+
+    def eliminar_demo(self, id_demo):
+        return self.repository.ejecutar(
+            "sp_eliminar_demo",
+            (id_demo,)
+        )
+
+    # ---------------------------------------------
+    # VALIDAR DEMO ANTES DE EJECUTAR
+    # ---------------------------------------------
+
     def validar_demo(self, id_vehiculo, id_demo):
         vehiculo = self.vehiculo_service.obtener_vehiculo(
             id_vehiculo
         )
 
         if vehiculo is None or not vehiculo["activo"]:
-            raise ValueError("Vehículo no existe o está inactivo")
+            raise ValueError(
+                "Vehículo no existe o está inactivo"
+            )
 
         demos = self.obtener_demos(id_vehiculo)
 
@@ -50,12 +110,18 @@ class DemoService:
         )
 
         if demo is None or not demo["activo"]:
-            raise ValueError("DEMO no existe o está inactivo")
+            raise ValueError(
+                "DEMO no existe o está inactivo"
+            )
 
-        movimientos = self.obtener_movimientos_demo(id_demo)
+        movimientos = self.obtener_movimientos_demo(
+            id_demo
+        )
 
         if not movimientos:
-            raise ValueError("El DEMO no tiene movimientos")
+            raise ValueError(
+                "El DEMO no tiene movimientos"
+            )
 
         movimientos = sorted(
             movimientos,
@@ -70,12 +136,16 @@ class DemoService:
             pausa = movimiento["pausa_ms"]
 
             if orden in ordenes or orden <= 0:
-                raise ValueError("Orden de movimiento inválido")
+                raise ValueError(
+                    "Orden de movimiento inválido"
+                )
 
             ordenes.add(orden)
 
             if duracion <= 0 or pausa < 0:
-                raise ValueError("Duración o pausa inválida")
+                raise ValueError(
+                    "Duración o pausa inválida"
+                )
 
             self.estado_service.validar_movimiento(
                 id_vehiculo,
@@ -84,7 +154,16 @@ class DemoService:
 
         return movimientos
 
-    async def notificar(self, tipo, id_vehiculo, **datos):
+    # ---------------------------------------------
+    # NOTIFICACIONES WEBSOCKET
+    # ---------------------------------------------
+
+    async def notificar(
+        self,
+        tipo,
+        id_vehiculo,
+        **datos
+    ):
         evento = websocket_manager.crear_evento(
             tipo,
             id_vehiculo,
@@ -96,17 +175,27 @@ class DemoService:
                 id_vehiculo,
                 evento
             )
+
         except Exception:
             logger.exception(
                 "Error enviando evento WebSocket"
             )
 
-    async def iniciar_demo(self, id_vehiculo, id_demo):
+    # ---------------------------------------------
+    # INICIAR DEMO
+    # ---------------------------------------------
+
+    async def iniciar_demo(
+        self,
+        id_vehiculo,
+        id_demo
+    ):
         async with self.bloqueo:
+
             if id_vehiculo in self.tareas:
                 raise ValueError(
-                    "Ya existe un DEMO ejecutándose o finalizando "
-                    "para este vehículo"
+                    "Ya existe un DEMO ejecutándose "
+                    "o finalizando para este vehículo"
                 )
 
             movimientos = await asyncio.to_thread(
@@ -139,14 +228,27 @@ class DemoService:
             "estado": "ejecutando"
         }
 
-    async def esperar(self, segundos, cancelacion):
+    # ---------------------------------------------
+    # ESPERAR DURACIÓN O PAUSA
+    # ---------------------------------------------
+
+    async def esperar(
+        self,
+        segundos,
+        cancelacion
+    ):
         try:
             await asyncio.wait_for(
                 cancelacion.wait(),
                 timeout=segundos
             )
+
         except asyncio.TimeoutError:
             pass
+
+    # ---------------------------------------------
+    # EJECUTAR MOVIMIENTOS DEL DEMO
+    # ---------------------------------------------
 
     async def ejecutar_demo(
         self,
@@ -171,7 +273,7 @@ class DemoService:
                     resultado_final = "cancelado"
                     break
 
-                # DEMO: actualiza estado SIN registrar historial
+                # DEMO: actualiza estado sin historial
                 resultado = await asyncio.to_thread(
                     self.estado_service.ejecutar_movimiento_demo,
                     id_vehiculo,
@@ -217,21 +319,27 @@ class DemoService:
             logger.exception(
                 "Error durante la ejecución del DEMO"
             )
+
             resultado_final = "error"
 
         finally:
+
             if resultado_final != "finalizado":
+
                 try:
-                    # DETENER también actualiza solo estado
+                    # DETENER: actualiza solo el estado
                     await asyncio.to_thread(
                         self.estado_service.ejecutar_movimiento_demo,
                         id_vehiculo,
                         9
                     )
+
                 except Exception:
                     fallo_detener = True
+
                     logger.exception(
-                        "No se pudo actualizar el estado a DETENER"
+                        "No se pudo actualizar "
+                        "el estado a DETENER"
                     )
 
             self.estados[id_vehiculo] = resultado_final
@@ -249,14 +357,27 @@ class DemoService:
             )
 
             async with self.bloqueo:
+
                 tarea_actual = asyncio.current_task()
 
                 if self.tareas.get(id_vehiculo) is tarea_actual:
-                    self.cancelaciones.pop(id_vehiculo, None)
-                    self.tareas.pop(id_vehiculo, None)
+                    self.cancelaciones.pop(
+                        id_vehiculo,
+                        None
+                    )
+
+                    self.tareas.pop(
+                        id_vehiculo,
+                        None
+                    )
+
+    # ---------------------------------------------
+    # CANCELAR DEMO
+    # ---------------------------------------------
 
     async def cancelar_demo(self, id_vehiculo):
         async with self.bloqueo:
+
             cancelacion = self.cancelaciones.get(
                 id_vehiculo
             )
@@ -267,6 +388,7 @@ class DemoService:
                 )
 
             cancelacion.set()
+
             self.estados[id_vehiculo] = "cancelando"
 
         return {
@@ -274,6 +396,10 @@ class DemoService:
             "id_vehiculo": id_vehiculo,
             "estado": "cancelando"
         }
+
+    # ---------------------------------------------
+    # CONSULTAR ESTADO DE EJECUCIÓN
+    # ---------------------------------------------
 
     def consultar_ejecucion(self, id_vehiculo):
         return {
