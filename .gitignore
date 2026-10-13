@@ -1,0 +1,20 @@
+
+# Variables de entorno
+.env
+.env.*
+!.env.example
+
+# Entornos virtuales
+.venv/
+venv/
+
+# Archivos temporales Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Configuracion VS Code
+.vscode/
+
+# Logs
+*.log
