@@ -89,6 +89,62 @@ class DemoService:
         )
 
     # ---------------------------------------------
+    # AGREGAR MOVIMIENTO A UN DEMO
+    # ---------------------------------------------
+
+    def agregar_movimiento_demo(
+        self,
+        id_demo,
+        id_comando,
+        orden,
+        duracion_ms,
+        pausa_ms
+    ):
+        return self.repository.ejecutar(
+            "sp_agregar_movimiento_demo",
+            (
+                id_demo,
+                id_comando,
+                orden,
+                duracion_ms,
+                pausa_ms
+            )
+        )
+
+    # ---------------------------------------------
+    # ACTUALIZAR MOVIMIENTO DE UN DEMO
+    # ---------------------------------------------
+
+    def actualizar_movimiento_demo(
+        self,
+        id_demo_movimiento,
+        id_comando,
+        orden,
+        duracion_ms,
+        pausa_ms
+    ):
+        return self.repository.ejecutar(
+            "sp_actualizar_movimiento_demo",
+            (
+                id_demo_movimiento,
+                id_comando,
+                orden,
+                duracion_ms,
+                pausa_ms
+            )
+        )
+
+    # ---------------------------------------------
+    # ELIMINAR MOVIMIENTO DE UN DEMO
+    # ---------------------------------------------
+
+    def eliminar_movimiento_demo(self, id_demo_movimiento):
+        return self.repository.ejecutar(
+            "sp_eliminar_movimiento_demo",
+            (id_demo_movimiento,)
+        )
+
+    # ---------------------------------------------
     # VALIDAR DEMO ANTES DE EJECUTAR
     # ---------------------------------------------
 
@@ -273,7 +329,7 @@ class DemoService:
                     resultado_final = "cancelado"
                     break
 
-                # DEMO: actualiza estado sin historial
+                # DEMO: actualiza estado SIN registrar historial
                 resultado = await asyncio.to_thread(
                     self.estado_service.ejecutar_movimiento_demo,
                     id_vehiculo,
@@ -319,27 +375,21 @@ class DemoService:
             logger.exception(
                 "Error durante la ejecución del DEMO"
             )
-
             resultado_final = "error"
 
         finally:
-
             if resultado_final != "finalizado":
-
                 try:
-                    # DETENER: actualiza solo el estado
+                    # DETENER también actualiza solo estado
                     await asyncio.to_thread(
                         self.estado_service.ejecutar_movimiento_demo,
                         id_vehiculo,
                         9
                     )
-
                 except Exception:
                     fallo_detener = True
-
                     logger.exception(
-                        "No se pudo actualizar "
-                        "el estado a DETENER"
+                        "No se pudo actualizar el estado a DETENER"
                     )
 
             self.estados[id_vehiculo] = resultado_final
@@ -357,7 +407,6 @@ class DemoService:
             )
 
             async with self.bloqueo:
-
                 tarea_actual = asyncio.current_task()
 
                 if self.tareas.get(id_vehiculo) is tarea_actual:
@@ -365,7 +414,6 @@ class DemoService:
                         id_vehiculo,
                         None
                     )
-
                     self.tareas.pop(
                         id_vehiculo,
                         None
@@ -377,7 +425,6 @@ class DemoService:
 
     async def cancelar_demo(self, id_vehiculo):
         async with self.bloqueo:
-
             cancelacion = self.cancelaciones.get(
                 id_vehiculo
             )
@@ -388,7 +435,6 @@ class DemoService:
                 )
 
             cancelacion.set()
-
             self.estados[id_vehiculo] = "cancelando"
 
         return {
