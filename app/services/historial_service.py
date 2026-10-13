@@ -13,8 +13,15 @@ class HistorialService:
             (id_vehiculo,)
         )
 
+        # Mostrar únicamente movimientos individuales
+        registros_individuales = [
+            registro for registro in registros
+            if registro.get("origen") != "DEMO"
+        ]
+
+        # Ordenar del más reciente al más antiguo
         registros_ordenados = sorted(
-            registros,
+            registros_individuales,
             key=lambda r: (
                 r["fecha_hora"],
                 r["id_historial"]
@@ -22,4 +29,5 @@ class HistorialService:
             reverse=True
         )
 
+        # Devolver un máximo de 10 movimientos
         return registros_ordenados[:10]
